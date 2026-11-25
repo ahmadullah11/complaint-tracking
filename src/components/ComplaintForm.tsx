@@ -50,12 +50,38 @@ export default function ComplaintForm() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await res.json();
+
+      // Read as text first: a Vercel crash can return an HTML/plain-text 500
+      // instead of JSON, and we still want to show the real reason.
+      const raw = await res.text();
+      let data: Record<string, unknown> = {};
+      if (raw) {
+        try {
+          data = JSON.parse(raw) as Record<string, unknown>;
+        } catch {
+          data = {};
+        }
+      }
+
       if (!res.ok) {
-        setErrors(data.errors ?? {});
-        setFormError(data.error ?? "Could not submit the complaint.");
+        const fieldErrors =
+          data.errors && typeof data.errors === "object"
+            ? (data.errors as Record<string, string>)
+            : {};
+        const serverMessage = typeof data.error === "string" ? data.error.trim() : "";
+
+        setErrors(fieldErrors);
+        setFormError(
+          serverMessage || `Request failed (HTTP ${res.status}). Please try again later.`,
+        );
         return;
       }
+
+      if (typeof data.trackingNumber !== "string" || typeof data.createdAt !== "string") {
+        setFormError("The server returned an unexpected response. Please try again.");
+        return;
+      }
+
       setSubmitted({ trackingNumber: data.trackingNumber, createdAt: data.createdAt });
       form.reset();
     } catch {
@@ -179,7 +205,12 @@ export default function ComplaintForm() {
       </fieldset>
 
       {formError ? (
-        <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{formError}</div>
+        <div
+          role="alert"
+          className="whitespace-pre-line break-words rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
+        >
+          {formError}
+        </div>
       ) : null}
 
       <button

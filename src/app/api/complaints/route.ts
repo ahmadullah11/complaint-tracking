@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { connectDB } from "@/db";
 import { Complaint, User } from "@/db/schema";
 import { formatTrackingNumber, validateComplaintInput } from "@/lib/complaints";
+import { getPublicErrorMessage } from "@/lib/api-errors";
+import { checkServerEnv } from "@/lib/env";
 
+// Mongoose needs the Node.js runtime (it cannot run on Edge).
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 function isUniqueViolation(err: unknown): boolean {
@@ -14,6 +18,13 @@ function isUniqueViolation(err: unknown): boolean {
 // Submit a complaint: creates/updates the user account (by CNIC) and saves the complaint
 // with a unique tracking number generated from the current date, time and seconds.
 export async function POST(req: Request) {
+  // Fail fast with a clear message when Vercel is missing required configuration.
+  const env = checkServerEnv();
+  if (!env.ok) {
+    console.error(`[POST /api/complaints] Configuration error: ${env.message}`);
+    return NextResponse.json({ error: env.message }, { status: 500 });
+  }
+
   let body: unknown;
   try {
     body = await req.json();
@@ -83,7 +94,18 @@ export async function POST(req: Request) {
       { status: 201 },
     );
   } catch (err) {
-    console.error("Failed to submit complaint", err);
-    return NextResponse.json({ error: "Server error. Please try again later." }, { status: 500 });
+    const message = getPublicErrorMessage(err);
+
+    console.error("[POST /api/complaints] Failed to submit complaint.");
+    console.error(
+      "[POST /api/complaints] error.message:",
+      err instanceof Error ? err.message : String(err),
+    );
+    console.error(
+      "[POST /api/complaints] error.stack:",
+      err instanceof Error ? err.stack : "(no stack available)",
+    );
+
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

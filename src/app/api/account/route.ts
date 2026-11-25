@@ -1,13 +1,22 @@
 import { NextResponse } from "next/server";
 import { connectDB } from "@/db";
 import { Complaint, User } from "@/db/schema";
+import { getPublicErrorMessage } from "@/lib/api-errors";
 import { normalizeCnic, normalizeMobile } from "@/lib/complaints";
+import { checkServerEnv } from "@/lib/env";
 
+export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 // GET /api/account?cnic=...&mobile=...  → account details and all complaints of that account.
 // Both CNIC and mobile must match so other people cannot read the account.
 export async function GET(req: Request) {
+  const env = checkServerEnv();
+  if (!env.ok) {
+    console.error(`[GET /api/account] Configuration error: ${env.message}`);
+    return NextResponse.json({ error: env.message }, { status: 500 });
+  }
+
   const params = new URL(req.url).searchParams;
   const cnic = normalizeCnic(params.get("cnic") ?? "");
   const mobile = normalizeMobile((params.get("mobile") ?? "").trim());
@@ -46,7 +55,14 @@ export async function GET(req: Request) {
 
     return NextResponse.json({ account, complaints: rows });
   } catch (err) {
-    console.error("Failed to load account", err);
-    return NextResponse.json({ error: "Server error. Please try again later." }, { status: 500 });
+    console.error(
+      "[GET /api/account] Failed to load account:",
+      err instanceof Error ? err.message : String(err),
+    );
+    console.error(
+      "[GET /api/account] error.stack:",
+      err instanceof Error ? err.stack : "(no stack available)",
+    );
+    return NextResponse.json({ error: getPublicErrorMessage(err) }, { status: 500 });
   }
 }
