@@ -43,7 +43,7 @@ export async function POST(req: Request) {
           email: data.email,
         },
       },
-      { upsert: true, new: true, setDefaultsOnInsert: true },
+      { upsert: true, returnDocument: "after", setDefaultsOnInsert: true },
     );
 
     // 2. Create the complaint with a unique tracking number (date + time + seconds).

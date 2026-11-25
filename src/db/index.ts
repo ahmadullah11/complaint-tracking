@@ -19,8 +19,12 @@ if (!global.mongooseCache) {
 }
 
 export async function connectDB() {
-  if (cached.conn) {
+  if (cached.conn && mongoose.connection.readyState === 1) {
     return cached.conn;
+  }
+
+  if (cached.conn && mongoose.connection.readyState !== 1) {
+    cached.conn = null;
   }
 
   const MONGODB_URI = process.env.MONGODB_URI;
@@ -32,6 +36,7 @@ export async function connectDB() {
   if (!cached.promise) {
     const opts = {
       bufferCommands: false,
+      serverSelectionTimeoutMS: 5000,
     };
 
     cached.promise = mongoose.connect(MONGODB_URI, opts).then((mongooseInstance) => {
